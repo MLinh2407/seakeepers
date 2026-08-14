@@ -1,6 +1,7 @@
 # --- AWS credentials & secrets ---
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 aws_credentials.txt
