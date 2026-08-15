@@ -73,3 +73,15 @@ def login():
 def logout():
     session.clear()
     return jsonify({"message": "logged out"}), 200
+
+
+@auth_bp.route("/api/session", methods=["GET"])
+def check_session():
+    """
+    Lets the frontend ask "am I actually logged in?" against the real Flask
+    session, instead of relying on a JS variable that resets on every page
+    refresh (which was silently out of sync with the actual session cookie).
+    """
+    if "user_id" in session:
+        return jsonify({"logged_in": True, "username": session.get("username")}), 200
+    return jsonify({"logged_in": False}), 200
