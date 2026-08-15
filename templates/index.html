@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeaKeepers — Marine Debris Map</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>SeaKeepers</h1>
+    <div id="auth-panel">
+      <div id="logged-out-panel">
+        <form id="login-form" class="inline-form">
+          <input type="email" id="login-email" placeholder="Email" required />
+          <input type="password" id="login-password" placeholder="Password" required />
+          <button type="submit">Log in</button>
+        </form>
+        <details>
+          <summary>Need an account?</summary>
+          <form id="register-form" class="inline-form">
+            <input type="email" id="reg-email" placeholder="Email" required />
+            <input type="text" id="reg-username" placeholder="Username" required />
+            <input type="password" id="reg-password" placeholder="Password" required />
+            <button type="submit">Register</button>
+          </form>
+        </details>
+      </div>
+      <div id="logged-in-panel" style="display:none;">
+        Logged in as <strong id="current-username"></strong>
+        <button id="logout-btn">Log out</button>
+      </div>
+    </div>
+    <p id="auth-message" class="message"></p>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <aside id="report-panel">
+      <h2>Report Debris</h2>
+      <p id="report-login-notice">Log in to submit a report.</p>
+      <form id="report-form" style="display:none;">
+        <label for="category">Category</label>
+        <select id="category" required>
+          <option value="plastic">Plastic</option>
+          <option value="glass">Glass</option>
+          <option value="metal">Metal</option>
+          <option value="rubber">Rubber</option>
+          <option value="fabric">Fabric</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="severity">Severity</label>
+        <select id="severity" required>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+
+        <label for="address">Location</label>
+        <div class="location-input-wrap">
+          <input type="text" id="address" placeholder="Search for a place..." autocomplete="off" />
+          <ul id="address-suggestions" class="suggestions-list"></ul>
+        </div>
+        <button type="button" id="use-location-btn" class="secondary-btn">Use my current location</button>
+
+        <p class="hint">— or click a spot on the map to drop a pin —</p>
+        <p id="pin-status" class="message"></p>
+        <input type="hidden" id="lat" />
+        <input type="hidden" id="lon" />
+        <input type="hidden" id="site_name" />
+
+        <label for="photo">Photo (optional)</label>
+        <input type="file" id="photo" accept="image/*" />
+
+        <button type="submit">Submit report</button>
+      </form>
+      <p id="report-message" class="message"></p>
+    </aside>
+  </main>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
