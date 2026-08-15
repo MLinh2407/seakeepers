@@ -1,8 +1,9 @@
-from flask import Flask
+from flask import Flask, render_template
 
 from config import SECRET_KEY
 from routes.auth import auth_bp
 from routes.campaigns import campaigns_bp
+from routes.geocode import geocode_bp
 from routes.reports import reports_bp
 
 app = Flask(__name__)
@@ -11,10 +12,16 @@ app.secret_key = SECRET_KEY
 app.register_blueprint(auth_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(campaigns_bp)
+app.register_blueprint(geocode_bp)
 
 
 @app.route("/")
 def index():
+    return render_template("index.html")
+
+
+@app.route("/api/status")
+def status():
     return {"status": "SeaKeepers backend is running"}
 
 
