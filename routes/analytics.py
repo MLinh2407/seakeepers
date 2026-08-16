@@ -11,7 +11,7 @@ from utils.cache import cache_get, cache_set
 analytics_bp = Blueprint("analytics", __name__)
 reports_table = dynamodb.Table(REPORTS_TABLE)
 
-CACHE_TTL_SECONDS = 300  # 5 minutes
+CACHE_TTL_SECONDS = 5  # 5 minutes
 
 
 def _scan_all_reports():
