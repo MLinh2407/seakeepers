@@ -29,3 +29,20 @@ OPENWEATHERMAP_API_KEY = os.environ.get("OPENWEATHERMAP_API_KEY", "")
 NOMINATIM_USER_AGENT = os.environ.get(
     "NOMINATIM_USER_AGENT", "SeaKeepers-RMIT-Assignment3"
 )
+
+# ElastiCache (Redis) 
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+
+# The cluster's security group only allows inbound traffic from the EB
+# instance, so it's unreachable from a local machine by design. Set
+# REDIS_ENABLED=false in your local .env to skip Redis entirely during local
+# dev instead of waiting out a slow DNS/connection timeout on every request.
+REDIS_ENABLED = os.environ.get("REDIS_ENABLED", "true").lower() != "false"
+
+# Athena / Glue. ATHENA_TABLE must match your actual Glue Catalog
+# table name (it has an account-specific suffix, e.g. seakeepers_noaa_data_s4146535)
+ATHENA_DATABASE = os.environ.get("ATHENA_DATABASE", "seakeepers_catalog")
+ATHENA_TABLE = os.environ.get("ATHENA_TABLE", "seakeepers_noaa_data_s4146535")
+ATHENA_OUTPUT_LOCATION = os.environ.get("ATHENA_OUTPUT_LOCATION", "s3://seakeepers-athena-results/")
+ 
