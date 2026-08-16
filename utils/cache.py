@@ -33,7 +33,7 @@ def cache_get(key):
         return None
 
 
-def cache_set(key, value, ttl_seconds=300):
+def cache_set(key, value, ttl_seconds=5):
     """Store `value` (must be JSON-serializable) under `key` with a TTL.
     No-ops if the cache is disabled, and fails silently on any Redis error --
     a cache write failing should never break a response that's already
