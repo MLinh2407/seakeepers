@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeaKeepers — Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>SeaKeepers — Analytics</h1>
+    <a href="/" class="back-link">← Back to map</a>
+  </header>
+
+  <main class="dashboard-main">
+    <div class="chart-card">
+      <h2>Reports by Site (top 20)</h2>
+      <canvas id="region-chart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>Reports by Category</h2>
+      <canvas id="type-chart"></canvas>
+    </div>
+    <div class="chart-card chart-card-wide">
+      <h2>Reports Over Time</h2>
+      <canvas id="trends-chart"></canvas>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
