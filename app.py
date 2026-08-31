@@ -1,4 +1,6 @@
 from flask import Flask, render_template
+from routes.notifications import notifications_bp
+from routes.profile import profile_bp
 
 from config import SECRET_KEY
 from routes.analytics import analytics_bp
@@ -15,6 +17,8 @@ app.register_blueprint(reports_bp)
 app.register_blueprint(campaigns_bp)
 app.register_blueprint(geocode_bp)
 app.register_blueprint(analytics_bp)
+app.register_blueprint(notifications_bp)
+app.register_blueprint(profile_bp)
 
 
 @app.route("/")
