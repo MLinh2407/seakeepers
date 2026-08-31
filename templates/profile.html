@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Page — SeaKeepers</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/campaigns.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>SeaKeepers — My Page</h1>
+    <a href="/" class="back-link">← Back to map</a>
+    <div id="notif-wrap">
+      <button id="notif-bell">🔔<span id="notif-badge"></span></button>
+      <div id="notif-dropdown"></div>
+    </div>
+  </header>
+
+  <main class="profile-main">
+    <p id="profile-login-notice">Loading your page...</p>
+
+    <div id="profile-content" style="display:none;">
+      <section>
+        <h2>My Reports</h2>
+        <div id="my-reports-list"></div>
+      </section>
+
+      <section>
+        <h2>Campaigns I'm Organizing</h2>
+        <div id="my-campaigns-list"></div>
+      </section>
+
+      <section>
+        <h2>Campaigns I'm Attending</h2>
+        <div id="my-rsvps-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+</body>
+</html>
