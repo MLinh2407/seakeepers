@@ -21,11 +21,20 @@ function initMap() {
 
   map.on("load", () => {
     loadReports();
+    loadCampaignMarkers();
   });
 
   // Click-to-pin: resolves the clicked point to a place name via reverse
   // geocoding, and drops the visual pending-pin marker there.
   map.on("click", async (e) => {
+    // If this click actually landed on an existing marker (debris, campaign,
+    // or the pending pin itself), let MapLibre's own marker/popup handling
+    // deal with it 
+    const target = e.originalEvent.target;
+    if (target.closest(".debris-marker, .campaign-marker, .pending-pin")) {
+      return;
+    }
+
     const lat = e.lngLat.lat;
     const lon = e.lngLat.lng;
     setPendingLocation(lat, lon, "Looking up this location...");
@@ -40,6 +49,43 @@ function initMap() {
 }
 
 let markers = [];
+let campaignMarkers = [];
+
+async function loadCampaignMarkers() {
+  const res = await fetch("/api/campaigns");
+  const campaigns = await res.json();
+
+  campaignMarkers.forEach((m) => m.remove());
+  campaignMarkers = [];
+
+  campaigns.forEach((c) => {
+    if (c.lat == null || c.lon == null) return; // older/malformed campaigns without a resolved location
+
+    const el = document.createElement("div");
+    el.className = "campaign-marker";
+    el.innerHTML = `
+      <svg width="26" height="26" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C7.6 0 4 3.6 4 8c0 5.4 8 16 8 16s8-10.6 8-16c0-4.4-3.6-8-8-8z" fill="#9b59b6"/>
+        <circle cx="12" cy="8" r="3" fill="white"/>
+      </svg>
+    `;
+
+    const popupHtml = `
+      <strong>${escapeHtml(c.location_name || "Cleanup event")}</strong><br/>
+      ${c.date ? escapeHtml(c.date) + "<br/>" : ""}
+      ${c.description ? escapeHtml(c.description) + "<br/>" : ""}
+      ${c.rsvp_count ?? 0} going<br/>
+      <a href="/campaigns/${c.campaign_id}" target="_blank" rel="noopener">View & RSVP →</a>
+    `;
+
+    const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+      .setLngLat([c.lon, c.lat])
+      .setPopup(new maplibregl.Popup({ offset: 12 }).setHTML(popupHtml))
+      .addTo(map);
+
+    campaignMarkers.push(marker);
+  });
+}
 
 async function loadReports() {
   const res = await fetch("/api/reports");
@@ -168,8 +214,15 @@ async function reverseGeocode(lat, lon) {
 
 async function useCurrentLocation() {
   const status = document.getElementById("pin-status");
+
   if (!navigator.geolocation) {
     status.textContent = "Your browser doesn't support geolocation.";
+    return;
+  }
+
+  if (!window.isSecureContext) {
+    status.textContent =
+      "Current-location requires a secure (HTTPS) connection, which this deployment doesn't have. Search for an address or click the map instead.";
     return;
   }
 

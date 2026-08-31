@@ -11,6 +11,12 @@
   <header>
     <h1>SeaKeepers</h1>
     <a href="/dashboard" style="color:white;">Analytics →</a>
+    <a href="/campaigns" style="color:white;">Campaigns →</a>
+    <a href="/profile" style="color:white;">My Page →</a>
+    <div id="notif-wrap">
+      <button id="notif-bell">🔔<span id="notif-badge"></span></button>
+      <div id="notif-dropdown"></div>
+    </div>
     <div id="auth-panel">
       <div id="logged-out-panel">
         <form id="login-form" class="inline-form">
@@ -36,8 +42,20 @@
     <p id="auth-message" class="message"></p>
   </header>
 
-  <main>
+  <main class="map-main">
     <div id="map"></div>
+    <div class="map-legend">
+      <div class="legend-title">Map key</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#2ecc71;"></span> Low severity debris</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#f39c12;"></span> Medium severity debris</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#e74c3c;"></span> High severity debris</div>
+      <div class="legend-row"><span class="legend-pin">
+        <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C7.6 0 4 3.6 4 8c0 5.4 8 16 8 16s8-10.6 8-16c0-4.4-3.6-8-8-8z" fill="#9b59b6"/>
+          <circle cx="12" cy="8" r="3" fill="white"/>
+        </svg>
+      </span> Cleanup campaign</div>
+    </div>
 
     <aside id="report-panel">
       <h2>Report Debris</h2>
@@ -84,5 +102,6 @@
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
 </body>
 </html>
