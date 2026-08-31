@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeaKeepers — Campaigns</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/campaigns.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>SeaKeepers — Campaigns</h1>
+    <a href="/" class="back-link">← Back to map</a>
+    <div id="notif-wrap">
+      <button id="notif-bell">🔔<span id="notif-badge"></span></button>
+      <div id="notif-dropdown"></div>
+    </div>
+  </header>
+
+  <main class="campaigns-main">
+    <section class="create-campaign-card">
+      <h2>Organize a Cleanup</h2>
+
+      <div id="popular-sites" class="popular-sites"></div>
+
+      <form id="campaign-form">
+        <label for="campaign-location">Location</label>
+        <div class="location-input-wrap">
+          <input type="text" id="campaign-location" placeholder="Search for a place..." autocomplete="off" />
+          <ul id="campaign-location-suggestions" class="suggestions-list"></ul>
+        </div>
+
+        <label for="campaign-date">Date</label>
+        <input type="date" id="campaign-date" required />
+
+        <label for="campaign-description">Description</label>
+        <textarea id="campaign-description" rows="3" placeholder="What's the plan?"></textarea>
+
+        <label for="campaign-photo">Photo (optional, shown when shared)</label>
+        <input type="file" id="campaign-photo" accept="image/*" />
+
+        <button type="submit">Create campaign</button>
+      </form>
+      <p id="campaign-message" class="message"></p>
+    </section>
+
+    <section class="campaigns-list-section">
+      <h2>Upcoming Campaigns</h2>
+      <div id="campaigns-list"></div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/campaigns.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+</body>
+</html>

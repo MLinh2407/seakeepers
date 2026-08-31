@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ campaign.location_name }} Cleanup — SeaKeepers</title>
+
+  <!-- Open Graph tags: rendered server-side so Facebook's link-preview
+       crawler (which doesn't execute JS) can read them directly -->
+  <meta property="og:title" content="Beach Cleanup at {{ campaign.location_name }}" />
+  <meta property="og:description" content="{{ campaign.description }} — {{ campaign.date }}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="{{ campaign_url }}" />
+  {% if campaign.photo_url %}
+  <meta property="og:image" content="{{ campaign.photo_url }}" />
+  {% endif %}
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/campaigns.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>SeaKeepers</h1>
+    <a href="/campaigns" class="back-link">← All campaigns</a>
+    <div id="notif-wrap">
+      <button id="notif-bell">🔔<span id="notif-badge"></span></button>
+      <div id="notif-dropdown"></div>
+    </div>
+  </header>
+
+  <main class="campaign-detail">
+    <div class="campaign-detail-header">
+      <div class="campaign-avatar" id="campaign-avatar"></div>
+      <div class="campaign-header-text">
+        <span class="campaign-organizer" id="campaign-organizer"></span>
+        <span class="campaign-posted" id="campaign-posted-line"></span>
+      </div>
+    </div>
+    {% if campaign.photo_url %}
+    <img src="{{ campaign.photo_url }}" alt="" class="campaign-photo" onerror="this.style.display='none'" />
+    {% endif %}
+    <div class="campaign-detail-body">
+      <h2 class="campaign-location">{{ campaign.location_name }}</h2>
+      <span class="campaign-date-badge" id="campaign-date-line"></span>
+      <p class="campaign-description">{{ campaign.description }}</p>
+      <p id="rsvp-status"></p>
+      <button id="rsvp-btn" class="icon-btn rsvp-btn" data-campaign-id="{{ campaign.campaign_id }}">RSVP</button>
+    </div>
+    <div class="share-row">
+      <a id="fb-share" class="icon-btn" href="#" target="_blank" rel="noopener"></a>
+      <a id="gmail-share" class="icon-btn" href="#" target="_blank" rel="noopener"></a>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/campaigns.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+</body>
+</html>
