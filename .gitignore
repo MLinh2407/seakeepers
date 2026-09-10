@@ -35,8 +35,6 @@ instance/
 !.vscode/settings.json
 !.vscode/extensions.json
 *.code-workspace
-.clinerules/
-.clineignore
 
 # --- OS-generated files ---
 .DS_Store
@@ -62,5 +60,3 @@ npm-debug.log*
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
-
-*cookies.txt
