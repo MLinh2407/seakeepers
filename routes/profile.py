@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 
-from flask import Blueprint, jsonify, render_template, session
+from flask import Blueprint, jsonify, redirect, render_template, session, url_for
 
 from config import CAMPAIGNS_TABLE, REPORTS_TABLE, RSVPS_TABLE
 from utils.aws_clients import dynamodb
@@ -21,10 +21,7 @@ def _clean_item(item):
 
 
 def _query_all(table, index_name, key_name, key_value):
-    """Paginated Query against a GSI -- reads only matching items, unlike a
-    Scan which reads (and bills for) the whole table every time regardless
-    of match count. Cost and speed here scale with the user's own data,
-    not total table size."""
+    """Paginated query against a GSI to fetch only matching items for a key."""
     items = []
     kwargs = {
         "IndexName": index_name,
@@ -41,6 +38,8 @@ def _query_all(table, index_name, key_name, key_value):
 
 @profile_bp.route("/profile", methods=["GET"])
 def profile_page():
+    if "user_id" not in session:
+        return redirect(url_for("index"))
     return render_template("profile.html")
 
 
@@ -51,9 +50,7 @@ def get_profile():
 
     user_id = session["user_id"]
 
-    # Each of these is now a targeted Query against a GSI, not a full table
-    # scan -- reads only this user's rows, so cost/speed no longer grows
-    # with total table size as the app scales.
+    # Parallel GSI queries for user-specific data
     with ThreadPoolExecutor(max_workers=3) as executor:
         reports_future = executor.submit(
             _query_all, reports_table, "user_id-timestamp-index", "user_id", user_id
@@ -74,8 +71,7 @@ def get_profile():
     for c in my_campaigns:
         c.update(rsvp_info(c["campaign_id"], user_id))
 
-    # Still need the actual campaign details for each RSVP'd campaign_id --
-    # these are individual get_item calls (fast, key-based lookups), not scans
+    # Fetch campaign details for each RSVP
     rsvped_campaigns = []
     for r in my_rsvps:
         result = campaigns_table.get_item(Key={"campaign_id": r["campaign_id"]})

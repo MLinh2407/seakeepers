@@ -10,6 +10,8 @@ from utils.aws_clients import dynamodb
 auth_bp = Blueprint("auth", __name__)
 users_table = dynamodb.Table(USERS_TABLE)
 
+MIN_PASSWORD_LENGTH = 8
+
 
 @auth_bp.route("/api/register", methods=["POST"])
 def register():
@@ -20,10 +22,11 @@ def register():
 
     if not email or not username or not password:
         return jsonify({"error": "email, username, and password are required"}), 400
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify(
+            {"error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"}
+        ), 400
 
-    # NOTE: scan+filter works fine at this project's scale (a handful of test
-    # users). If this ever needed to scale, email should get its own GSI so
-    # lookups are O(1) instead of a full table scan.
     existing = users_table.scan(
         FilterExpression="email = :e",
         ExpressionAttributeValues={":e": email},
@@ -63,6 +66,7 @@ def login():
     if not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "invalid credentials"}), 401
 
+    session.permanent = True
     session["user_id"] = user["user_id"]
     session["username"] = user["username"]
 
@@ -77,11 +81,7 @@ def logout():
 
 @auth_bp.route("/api/session", methods=["GET"])
 def check_session():
-    """
-    Lets the frontend ask "am I actually logged in?" against the real Flask
-    session, instead of relying on a JS variable that resets on every page
-    refresh (which was silently out of sync with the actual session cookie).
-    """
+    """Returns the current authentication status from the Flask session"""
     if "user_id" in session:
         return jsonify({"logged_in": True, "username": session.get("username")}), 200
     return jsonify({"logged_in": False}), 200

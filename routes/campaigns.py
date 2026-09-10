@@ -2,20 +2,24 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from botocore.exceptions import BotoCoreError, ClientError
 from flask import Blueprint, jsonify, render_template, request, session
 
-from config import CAMPAIGNS_TABLE, PHOTOS_BUCKET, RSVPS_TABLE
-from utils.aws_clients import dynamodb, s3
+from config import CAMPAIGNS_TABLE, RSVPS_TABLE
+from utils.aws_clients import dynamodb
 from utils.notifications import create_notification
+from utils.photo_upload import upload_photo
 from utils.rsvp_helpers import rsvp_info
 
 campaigns_bp = Blueprint("campaigns", __name__)
 campaigns_table = dynamodb.Table(CAMPAIGNS_TABLE)
 rsvps_table = dynamodb.Table(RSVPS_TABLE)
 
+MAX_DESCRIPTION_LEN = 2000
+
 
 def _clean_item(item):
-    """Convert any DynamoDB Decimal fields to plain int/float for JSON."""
+    """Convert any DynamoDB Decimal fields to plain int/float for JSON"""
     for key, value in item.items():
         if isinstance(value, Decimal):
             item[key] = int(value) if value % 1 == 0 else float(value)
@@ -27,8 +31,6 @@ def create_campaign():
     if "user_id" not in session:
         return jsonify({"error": "login required"}), 401
 
-    # multipart form now (not JSON) -- same pattern as report submission,
-    # since this accepts an optional photo file alongside the other fields
     location_name = (request.form.get("location_name") or "").strip()
     lat = request.form.get("lat")
     lon = request.form.get("lon")
@@ -42,6 +44,10 @@ def create_campaign():
         ), 400
     if not date or not description:
         return jsonify({"error": "date and description are required"}), 400
+    if len(description) > MAX_DESCRIPTION_LEN:
+        return jsonify(
+            {"error": f"description must be under {MAX_DESCRIPTION_LEN} characters"}
+        ), 400
 
     try:
         parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
@@ -55,19 +61,16 @@ def create_campaign():
         lon = float(lon)
     except (TypeError, ValueError):
         return jsonify({"error": "lat/lon must be valid numbers"}), 400
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return jsonify({"error": "lat/lon are out of valid range"}), 400
 
     campaign_id = str(uuid.uuid4())
-    photo_url = None
 
-    if photo and photo.filename:
-        key = f"campaigns/{campaign_id}/{photo.filename}"
-        s3.upload_fileobj(
-            photo,
-            PHOTOS_BUCKET,
-            key,
-            ExtraArgs={"ContentType": photo.content_type or "application/octet-stream"},
-        )
-        photo_url = f"https://{PHOTOS_BUCKET}.s3.amazonaws.com/{key}"
+    photo_url, photo_error, is_validation_error = upload_photo(
+        photo, f"campaigns/{campaign_id}"
+    )
+    if is_validation_error:
+        return jsonify({"error": photo_error}), 400
 
     item = {
         "campaign_id": campaign_id,
@@ -83,16 +86,34 @@ def create_campaign():
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     item = {k: v for k, v in item.items() if v is not None}
-    campaigns_table.put_item(Item=item)
 
-    return jsonify({"message": "campaign created", "campaign_id": campaign_id}), 201
+    try:
+        campaigns_table.put_item(Item=item)
+    except (ClientError, BotoCoreError):
+        return jsonify(
+            {
+                "error": "Couldn't save your campaign right now -- please try again shortly."
+            }
+        ), 503
+
+    response = {"message": "campaign created", "campaign_id": campaign_id}
+    if photo_error:
+        response["warning"] = photo_error
+
+    return jsonify(response), 201
 
 
 @campaigns_bp.route("/api/campaigns", methods=["GET"])
 def get_campaigns():
     mine_only = request.args.get("mine") == "true"
 
-    result = campaigns_table.scan()
+    try:
+        result = campaigns_table.scan()
+    except (ClientError, BotoCoreError):
+        return jsonify(
+            {"error": "Couldn't load campaigns right now -- please try again shortly."}
+        ), 503
+
     items = [_clean_item(dict(item)) for item in result.get("Items", [])]
 
     current_user_id = session.get("user_id")
@@ -111,7 +132,15 @@ def get_campaigns():
 
 @campaigns_bp.route("/api/campaigns/<campaign_id>", methods=["GET"])
 def get_campaign(campaign_id):
-    result = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+    try:
+        result = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+    except (ClientError, BotoCoreError):
+        return jsonify(
+            {
+                "error": "Couldn't load that campaign right now -- please try again shortly."
+            }
+        ), 503
+
     item = result.get("Item")
     if not item:
         return jsonify({"error": "campaign not found"}), 404
@@ -127,22 +156,36 @@ def rsvp_campaign(campaign_id):
     if "user_id" not in session:
         return jsonify({"error": "login required"}), 401
 
-    existing = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+    try:
+        existing = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+    except (ClientError, BotoCoreError):
+        return jsonify(
+            {
+                "error": "Couldn't process your RSVP right now -- please try again shortly."
+            }
+        ), 503
+
     campaign = existing.get("Item")
     if not campaign:
         return jsonify({"error": "campaign not found"}), 404
 
-    rsvps_table.put_item(
-        Item={
-            "campaign_id": campaign_id,
-            "user_id": session["user_id"],
-            "username": session.get("username", ""),
-            "rsvp_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
+    try:
+        rsvps_table.put_item(
+            Item={
+                "campaign_id": campaign_id,
+                "user_id": session["user_id"],
+                "username": session.get("username", ""),
+                "rsvp_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    except (ClientError, BotoCoreError):
+        return jsonify(
+            {
+                "error": "Couldn't process your RSVP right now -- please try again shortly."
+            }
+        ), 503
 
-    # Notify the organizer someone's coming -- skip if they RSVP'd to their
-    # own campaign, that's not a useful notification
+    # Notify organizer if another user RSVPs
     organizer_id = campaign.get("organizer")
     if organizer_id and organizer_id != session["user_id"]:
         location_name = campaign.get("location_name", "your cleanup")
@@ -161,13 +204,21 @@ def cancel_rsvp(campaign_id):
     if "user_id" not in session:
         return jsonify({"error": "login required"}), 401
 
-    rsvps_table.delete_item(
-        Key={"campaign_id": campaign_id, "user_id": session["user_id"]}
-    )
+    try:
+        rsvps_table.delete_item(
+            Key={"campaign_id": campaign_id, "user_id": session["user_id"]}
+        )
+    except (ClientError, BotoCoreError):
+        return jsonify(
+            {
+                "error": "Couldn't cancel your RSVP right now -- please try again shortly."
+            }
+        ), 503
+
     return jsonify({"message": "RSVP cancelled"}), 200
 
 
-# --- Page routes (server-rendered, not API) ---
+# --- Page routes ---
 
 
 @campaigns_bp.route("/campaigns", methods=["GET"])
@@ -177,7 +228,11 @@ def campaigns_page():
 
 @campaigns_bp.route("/campaigns/<campaign_id>", methods=["GET"])
 def campaign_detail_page(campaign_id):
-    result = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+    try:
+        result = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+    except (ClientError, BotoCoreError):
+        return "Couldn't load this campaign right now -- please try again shortly.", 503
+
     item = result.get("Item")
     if not item:
         return "Campaign not found", 404

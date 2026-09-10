@@ -8,11 +8,11 @@ notifications_table = dynamodb.Table(NOTIFICATIONS_TABLE)
 
 
 def _my_notifications():
-    """Notifications table: partition key user_id, sort key notification_id
-    -- this is a Query (fast), not a scan."""
+    """Queries notifications by user_id using ConsistentRead=True to prevent stale state after writes."""
     result = notifications_table.query(
         KeyConditionExpression="user_id = :uid",
         ExpressionAttributeValues={":uid": session["user_id"]},
+        ConsistentRead=True,
     )
     items = result.get("Items", [])
     items.sort(key=lambda i: i.get("created_at", ""), reverse=True)
@@ -23,7 +23,8 @@ def _my_notifications():
 def get_notifications():
     if "user_id" not in session:
         return jsonify({"error": "login required"}), 401
-    return jsonify(_my_notifications()), 200
+    unread = [n for n in _my_notifications() if not n.get("read")]
+    return jsonify(unread), 200
 
 
 @notifications_bp.route("/api/notifications/unread-count", methods=["GET"])
