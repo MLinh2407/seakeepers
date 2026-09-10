@@ -9,16 +9,7 @@ _HEADERS = {"User-Agent": NOMINATIM_USER_AGENT}
 
 
 def search_suggestions(query, limit=5):
-    """
-    Return up to `limit` real place suggestions for a partial query, each as
-    {"display_name": str, "lat": float, "lon": float}.
-
-    This backs the address autocomplete dropdown -- the frontend only ever
-    lets a user submit a location by picking one of these, never by typing
-    free text, which is what stops garbage/non-existent addresses (Nominatim's
-    search is fuzzy and will loosely match almost anything, so "no results"
-    isn't a reliable validity check on its own).
-    """
+    """Returns place suggestions with names and coordinates for address autocomplete."""
     params = {"q": query, "format": "json", "limit": limit}
     try:
         resp = requests.get(
@@ -26,25 +17,29 @@ def search_suggestions(query, limit=5):
         )
         resp.raise_for_status()
         results = resp.json()
-    except requests.RequestException:
+    except (requests.RequestException, ValueError):
+        # Return empty list on network error or invalid JSON response
         return []
 
-    return [
-        {
-            "display_name": r["display_name"],
-            "lat": float(r["lat"]),
-            "lon": float(r["lon"]),
-        }
-        for r in results
-    ]
+    suggestions = []
+    for r in results:
+        try:
+            suggestions.append(
+                {
+                    "display_name": r["display_name"],
+                    "lat": float(r["lat"]),
+                    "lon": float(r["lon"]),
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            # Skip malformed items
+            continue
+
+    return suggestions
 
 
 def reverse_geocode(lat, lon):
-    """
-    Convert coordinates into a human-readable place name. Used to label a
-    map-click pin or a "use my current location" pin. Returns None if it
-    can't resolve (e.g. open ocean, far from any named place).
-    """
+    """Converts coordinates to a place name, returning None if unresolvable."""
     params = {"lat": lat, "lon": lon, "format": "json"}
     try:
         resp = requests.get(
@@ -52,7 +47,7 @@ def reverse_geocode(lat, lon):
         )
         resp.raise_for_status()
         data = resp.json()
-    except requests.RequestException:
+    except (requests.RequestException, ValueError):
         return None
 
     return data.get("display_name")

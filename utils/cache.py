@@ -21,23 +21,19 @@ def _get_client():
 
 
 def cache_get(key):
-    """Return the cached value for `key`, or None on a miss, a disabled
-    cache, OR any Redis error (connection issue, timeout, etc). Analytics
-    should still work -- just slower -- if the cache is unreachable."""
+    """Fetches JSON value from Redis by key, returning None on miss, error, or disabled cache."""
     if not REDIS_ENABLED:
         return None
     try:
         raw = _get_client().get(key)
         return json.loads(raw) if raw else None
-    except redis.RedisError:
+    except (redis.RedisError, ValueError):
+        # Treat corrupted/invalid JSON as a cache miss
         return None
 
 
 def cache_set(key, value, ttl_seconds=300):
-    """Store `value` (must be JSON-serializable) under `key` with a TTL.
-    No-ops if the cache is disabled, and fails silently on any Redis error --
-    a cache write failing should never break a response that's already
-    been computed."""
+    """Stores a JSON serializable value in Redis with a TTL, failing silently on error."""
     if not REDIS_ENABLED:
         return
     try:

@@ -8,15 +8,7 @@ _athena_client = boto3.client("athena", region_name=AWS_REGION)
 
 
 def run_athena_query(query, max_wait_seconds=30):
-    """
-    Run a SQL query against the Glue-cataloged NOAA data via Athena and
-    return the result rows as a list of dicts (column name -> value, all
-    as strings -- Athena returns everything as VarCharValue regardless of
-    the underlying column type).
-
-    Athena queries are asynchronous: this starts the query, then polls
-    get_query_execution until it succeeds, fails, or times out.
-    """
+    """Executes an Athena query, polls until completion, and returns results as a list of dicts."""
     response = _athena_client.start_query_execution(
         QueryString=query,
         QueryExecutionContext={"Database": ATHENA_DATABASE},

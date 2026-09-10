@@ -8,9 +8,7 @@ notifications_table = dynamodb.Table(NOTIFICATIONS_TABLE)
 
 
 def create_notification(user_id, message, link=None):
-    """Write a notification for `user_id`. Never raises -- a notification
-    failing to write should never break the action that triggered it
-    (e.g. an RSVP should still succeed even if this fails)."""
+    """Creates a notification for `user_id`, failing silently on error."""
     try:
         notifications_table.put_item(
             Item={
