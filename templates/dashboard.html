@@ -3,22 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SeaKeepers — Analytics</title>
+  <title>Analytics</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
 </head>
-<body>
-  <header>
-    <h1>SeaKeepers — Analytics</h1>
-    <a href="/" class="back-link">← Back to map</a>
+<body class="{% if not session.get('user_id') %}logged-out{% endif %}">
+  <header class="app-header">
+    <!-- Header & Navigation -->
+    <a href="/" class="site-logo">SeaKeepers</a>
+    <nav class="site-nav" aria-label="Primary navigation"><a href="/">Map</a><a href="/dashboard" aria-current="page">Analytics</a><a href="/campaigns">Campaigns</a><a href="/profile">My Page</a></nav>
+    <div class="header-actions">
+    <div id="notif-wrap">
+      <button id="notif-bell" type="button" aria-label="Open notifications" aria-expanded="false">🔔<span id="notif-badge"></span></button>
+      <div id="notif-dropdown"></div>
+    </div>
+    <div id="auth-panel" class="auth-panel"><button id="account-trigger" class="account-trigger" type="button" aria-expanded="false"><span class="account-avatar" aria-hidden="true">?</span><span id="account-label">Account</span></button><div id="account-popover" class="account-popover"><div id="logged-out-panel"><p class="account-title">Join SeaKeepers</p><p class="account-copy">Sign in to report debris and join cleanups.</p><form id="login-form" class="account-form"><label for="login-email">Email</label><input type="email" id="login-email" placeholder="you@example.com" required /><label for="login-password">Password</label><input type="password" id="login-password" placeholder="Your password" required /><button type="submit" class="primary-action">Log in</button></form><details class="register-details"><summary>Create an account</summary><form id="register-form" class="account-form"><label for="reg-email">Email</label><input type="email" id="reg-email" placeholder="you@example.com" required /><label for="reg-username">Username</label><input type="text" id="reg-username" placeholder="Choose a username" required /><label for="reg-password">Password</label><input type="password" id="reg-password" placeholder="At least 8 characters" minlength="8" required /><button type="submit" class="secondary-action">Create account</button></form></details></div><div id="logged-in-panel" class="logged-in-panel"><p class="account-copy">Signed in as <strong id="current-username"></strong></p><a href="/profile" class="account-link">Open My Page</a><button id="logout-btn" class="logout-action" type="button">Log out</button></div><p id="auth-message" class="message" role="status" aria-live="polite"></p></div></div>
+    </div>
   </header>
 
+  <div class="page-subheader page-subheader-back">
+    <a href="/" class="back-link">Back to map</a>
+  </div>
+
+  <!-- Dashboard Charts -->
   <main class="dashboard-main">
-    <div class="chart-card">
+    <h1 class="page-title dashboard-page-title">Analytics</h1>
+    <div class="chart-card chart-card-region">
       <h2>Reports by Site (top 20)</h2>
       <canvas id="region-chart"></canvas>
     </div>
-    <div class="chart-card">
+    <div class="chart-card chart-card-category">
       <h2>Reports by Category</h2>
       <canvas id="type-chart"></canvas>
     </div>
@@ -30,5 +44,7 @@
 
   <script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
 </body>
 </html>

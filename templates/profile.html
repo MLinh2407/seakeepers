@@ -3,43 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Page — SeaKeepers</title>
+  <title>My Page</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/campaigns.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}" />
 </head>
-<body>
-  <header>
-    <h1>SeaKeepers — My Page</h1>
-    <a href="/" class="back-link">← Back to map</a>
+<body class="{% if not session.get('user_id') %}logged-out{% endif %}">
+  <header class="app-header">
+    <a href="/" class="site-logo">SeaKeepers</a>
+    <nav class="site-nav" aria-label="Primary navigation"><a href="/">Map</a><a href="/dashboard">Analytics</a><a href="/campaigns">Campaigns</a><a href="/profile" aria-current="page">My Page</a></nav>
+    <div class="header-actions">
     <div id="notif-wrap">
-      <button id="notif-bell">🔔<span id="notif-badge"></span></button>
+      <button id="notif-bell" type="button" aria-label="Open notifications" aria-expanded="false">🔔<span id="notif-badge"></span></button>
       <div id="notif-dropdown"></div>
+    </div>
+    <div id="auth-panel" class="auth-panel"><button id="account-trigger" class="account-trigger" type="button" aria-expanded="false"><span class="account-avatar" aria-hidden="true">?</span><span id="account-label">Account</span></button><div id="account-popover" class="account-popover"><div id="logged-out-panel"><p class="account-title">Join SeaKeepers</p><p class="account-copy">Sign in to report debris and join cleanups.</p><form id="login-form" class="account-form"><label for="login-email">Email</label><input type="email" id="login-email" placeholder="you@example.com" required /><label for="login-password">Password</label><input type="password" id="login-password" placeholder="Your password" required /><button type="submit" class="primary-action">Log in</button></form><details class="register-details"><summary>Create an account</summary><form id="register-form" class="account-form"><label for="reg-email">Email</label><input type="email" id="reg-email" placeholder="you@example.com" required /><label for="reg-username">Username</label><input type="text" id="reg-username" placeholder="Choose a username" required /><label for="reg-password">Password</label><input type="password" id="reg-password" placeholder="At least 8 characters" minlength="8" required /><button type="submit" class="secondary-action">Create account</button></form></details></div><div id="logged-in-panel" class="logged-in-panel"><p class="account-copy">Signed in as <strong id="current-username"></strong></p><a href="/profile" class="account-link">Open My Page</a><button id="logout-btn" class="logout-action" type="button">Log out</button></div><p id="auth-message" class="message" role="status" aria-live="polite"></p></div></div>
     </div>
   </header>
 
+  <div class="page-subheader page-subheader-back">
+    <a href="/" class="back-link">Back to map</a>
+  </div>
+
+  <!-- Profile Content -->
   <main class="profile-main">
+    <div class="profile-intro">
+      <p class="profile-kicker">Your activity</p>
+      <h1 class="page-title">My Page</h1>
+      <p class="profile-intro-copy">Track the debris you have reported and the cleanups you are helping organize.</p>
+    </div>
     <p id="profile-login-notice">Loading your page...</p>
 
+    
     <div id="profile-content" style="display:none;">
-      <section>
-        <h2>My Reports</h2>
+      <!-- Activity Summary Tabs -->
+      <div class="profile-summary" role="tablist" aria-label="Activity details">
+        <button class="profile-summary-card is-active" type="button" role="tab" aria-selected="true" aria-controls="profile-panel-reports" id="profile-tab-reports" data-profile-tab="reports"><span class="profile-summary-label">Reports</span><strong id="reports-count">0</strong></button>
+        <button class="profile-summary-card" type="button" role="tab" aria-selected="false" aria-controls="profile-panel-organizing" id="profile-tab-organizing" data-profile-tab="organizing"><span class="profile-summary-label">Organizing</span><strong id="organizing-count">0</strong></button>
+        <button class="profile-summary-card" type="button" role="tab" aria-selected="false" aria-controls="profile-panel-attending" id="profile-tab-attending" data-profile-tab="attending"><span class="profile-summary-label">Attending</span><strong id="attending-count">0</strong></button>
+      </div>
+
+      <!-- Tab Panels: Reports, Organizing, Attending -->
+      <section class="profile-section profile-section-reports is-active" role="tabpanel" tabindex="0" aria-labelledby="profile-tab-reports" id="profile-panel-reports">
+        <div class="profile-section-heading"><h2>Reports</h2></div>
         <div id="my-reports-list"></div>
       </section>
 
-      <section>
-        <h2>Campaigns I'm Organizing</h2>
+      <section class="profile-section profile-section-organizing" role="tabpanel" tabindex="0" aria-labelledby="profile-tab-organizing" id="profile-panel-organizing" hidden>
+        <div class="profile-section-heading"><h2>Organizing</h2></div>
         <div id="my-campaigns-list"></div>
       </section>
 
-      <section>
-        <h2>Campaigns I'm Attending</h2>
+      <section class="profile-section profile-section-attending" role="tabpanel" tabindex="0" aria-labelledby="profile-tab-attending" id="profile-panel-attending" hidden>
+        <div class="profile-section-heading"><h2>Attending</h2></div>
         <div id="my-rsvps-list"></div>
       </section>
     </div>
   </main>
 
   <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
 </body>
 </html>

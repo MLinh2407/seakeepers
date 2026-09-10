@@ -2,6 +2,11 @@ let map;
 let currentUser = null;
 let pendingMarker = null;
 
+let allReports = [];
+let allCampaigns = [];
+let markers = [];
+let campaignMarkers = [];
+
 const severityColors = {
   low: "#2ecc71",
   medium: "#f39c12",
@@ -9,11 +14,21 @@ const severityColors = {
 };
 
 function initMap() {
-  // demotiles.maplibre.org is MapLibre's own free demo style -- no API key
-  // or account needed, fine for MVP. Swap for a nicer basemap later if desired.
+  // OpenStreetMap raster tiles
   map = new maplibregl.Map({
     container: "map",
-    style: "https://demotiles.maplibre.org/style.json",
+    style: {
+      version: 8,
+      sources: {
+        "osm-tiles": {
+          type: "raster",
+          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: '\u00a9 <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+        },
+      },
+      layers: [{ id: "osm-tiles", type: "raster", source: "osm-tiles", minzoom: 0, maxzoom: 19 }],
+    },
     center: [0, 20],
     zoom: 2,
   });
@@ -24,12 +39,9 @@ function initMap() {
     loadCampaignMarkers();
   });
 
-  // Click-to-pin: resolves the clicked point to a place name via reverse
-  // geocoding, and drops the visual pending-pin marker there.
+  // Click-to-pin: Reverse geocodes clicked point and sets a pending pin
   map.on("click", async (e) => {
-    // If this click actually landed on an existing marker (debris, campaign,
-    // or the pending pin itself), let MapLibre's own marker/popup handling
-    // deal with it 
+    // Ignore clicks on existing markers
     const target = e.originalEvent.target;
     if (target.closest(".debris-marker, .campaign-marker, .pending-pin")) {
       return;
@@ -48,17 +60,43 @@ function initMap() {
   });
 }
 
-let markers = [];
-let campaignMarkers = [];
+// --- Filters ---
+
+function currentFilters() {
+  const severities = Array.from(document.querySelectorAll(".filter-severity:checked")).map((el) => el.value);
+  return {
+    showReports: document.getElementById("filter-show-reports").checked,
+    showCampaigns: document.getElementById("filter-show-campaigns").checked,
+    severities,
+    category: document.getElementById("filter-category").value,
+  };
+}
+
+function applyFilters() {
+  renderReportMarkers();
+  renderCampaignMarkers();
+}
+
+// --- Campaigns ---
 
 async function loadCampaignMarkers() {
   const res = await fetch("/api/campaigns");
-  const campaigns = await res.json();
+  allCampaigns = await res.json();
+  renderCampaignMarkers();
+}
+
+function renderCampaignMarkers() {
+  const { showCampaigns } = currentFilters();
 
   campaignMarkers.forEach((m) => m.remove());
   campaignMarkers = [];
 
-  campaigns.forEach((c) => {
+  if (!showCampaigns) {
+    updateFilterCount();
+    return;
+  }
+
+  allCampaigns.forEach((c) => {
     if (c.lat == null || c.lon == null) return; // older/malformed campaigns without a resolved location
 
     const el = document.createElement("div");
@@ -75,7 +113,7 @@ async function loadCampaignMarkers() {
       ${c.date ? escapeHtml(c.date) + "<br/>" : ""}
       ${c.description ? escapeHtml(c.description) + "<br/>" : ""}
       ${c.rsvp_count ?? 0} going<br/>
-      <a href="/campaigns/${c.campaign_id}" target="_blank" rel="noopener">View & RSVP →</a>
+      <a href="/campaigns/${c.campaign_id}" target="_blank" rel="noopener">View and RSVP</a>
     `;
 
     const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
@@ -85,18 +123,37 @@ async function loadCampaignMarkers() {
 
     campaignMarkers.push(marker);
   });
+
+  updateFilterCount();
 }
+
+// --- Reports ---
 
 async function loadReports() {
   const res = await fetch("/api/reports");
-  const reports = await res.json();
+  allReports = await res.json();
+  renderReportMarkers();
+}
+
+function renderReportMarkers() {
+  const { showReports, severities, category } = currentFilters();
 
   markers.forEach((m) => m.remove());
   markers = [];
 
-  reports.forEach((r) => {
-    if (r.lat == null || r.lon == null) return;
+  if (!showReports) {
+    updateFilterCount();
+    return;
+  }
 
+  const filtered = allReports.filter((r) => {
+    if (r.lat == null || r.lon == null) return false;
+    if (!severities.includes(r.severity)) return false;
+    if (category !== "all" && r.category !== category) return false;
+    return true;
+  });
+
+  filtered.forEach((r) => {
     const el = document.createElement("div");
     el.className = "debris-marker";
     el.style.backgroundColor = severityColors[r.severity] || "#999";
@@ -116,6 +173,14 @@ async function loadReports() {
 
     markers.push(marker);
   });
+
+  updateFilterCount();
+}
+
+function updateFilterCount() {
+  const countEl = document.getElementById("filter-count");
+  if (!countEl) return;
+  countEl.textContent = `Showing ${markers.length} report${markers.length === 1 ? "" : "s"}, ${campaignMarkers.length} campaign${campaignMarkers.length === 1 ? "" : "s"}`;
 }
 
 function escapeHtml(str) {
@@ -124,7 +189,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// --- Pending pin (shows exactly where the report-in-progress will land) ---
+// --- Pending pin ---
 
 function pendingPinElement() {
   const el = document.createElement("div");
@@ -167,8 +232,7 @@ function clearPendingLocation() {
   }
 }
 
-// --- Geocoding (all proxied through our backend -- Nominatim requires a
-// custom User-Agent header that browsers won't let JS set directly) ---
+// --- Geocoding (proxied via backend for Nominatim headers) ---
 
 function debounce(fn, delay) {
   let timer;
@@ -220,6 +284,7 @@ async function useCurrentLocation() {
     return;
   }
 
+  // Geolocation requires HTTPS or localhost
   if (!window.isSecureContext) {
     status.textContent =
       "Current-location requires a secure (HTTPS) connection, which this deployment doesn't have. Search for an address or click the map instead.";
@@ -247,6 +312,33 @@ async function useCurrentLocation() {
   );
 }
 
+// --- Map search (navigational only) ---
+
+async function fetchMapSearchSuggestions(query) {
+  const list = document.getElementById("map-search-suggestions");
+  if (query.length < 3) {
+    list.innerHTML = "";
+    return;
+  }
+
+  const res = await fetch(`/api/geocode/suggest?q=${encodeURIComponent(query)}`);
+  const suggestions = await res.json();
+
+  list.innerHTML = "";
+  suggestions.forEach((s) => {
+    const li = document.createElement("li");
+    li.textContent = s.display_name;
+    li.addEventListener("click", () => {
+      document.getElementById("map-search").value = s.display_name;
+      list.innerHTML = "";
+      map.flyTo({ center: [s.lon, s.lat], zoom: 12 });
+    });
+    list.appendChild(li);
+  });
+}
+
+const debouncedFetchMapSearchSuggestions = debounce(fetchMapSearchSuggestions, 350);
+
 // --- Auth ---
 
 async function register(e) {
@@ -255,15 +347,19 @@ async function register(e) {
   const username = document.getElementById("reg-username").value;
   const password = document.getElementById("reg-password").value;
 
-  const res = await fetch("/api/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, username, password }),
-  });
-  const data = await res.json();
-  document.getElementById("auth-message").textContent = data.message || data.error;
-  if (res.ok) {
-    document.getElementById("register-form").reset();
+  try {
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, username, password }),
+    });
+    const data = await res.json();
+    document.getElementById("report-auth-message").textContent = data.message || data.error;
+    if (res.ok) {
+      document.getElementById("register-form").reset();
+    }
+  } catch {
+    document.getElementById("report-auth-message").textContent = "We couldn't create your account. Please try again.";
   }
 }
 
@@ -272,39 +368,50 @@ async function login(e) {
   const email = document.getElementById("login-email").value;
   const password = document.getElementById("login-password").value;
 
-  const res = await fetch("/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await res.json();
-  document.getElementById("auth-message").textContent = data.message || data.error;
-  if (res.ok) {
-    currentUser = data.username;
-    updateAuthUI();
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    document.getElementById("report-auth-message").textContent = data.message || data.error;
+    if (res.ok) {
+      currentUser = data.username;
+      updateAuthUI();
+    }
+  } catch {
+    document.getElementById("report-auth-message").textContent = "We couldn't sign you in. Please try again.";
   }
 }
 
 async function logout() {
   await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
   currentUser = null;
-  updateAuthUI();
+  window.location.replace("/");
 }
 
 function updateAuthUI() {
-  document.getElementById("logged-out-panel").style.display = currentUser ? "none" : "block";
+  document.body.classList.toggle("logged-out", !currentUser);
+  document.querySelectorAll("[data-auth-required], #notif-wrap, #auth-panel, a[href='/profile']").forEach((element) => {
+    element.hidden = !currentUser;
+  });
   document.getElementById("logged-in-panel").style.display = currentUser ? "block" : "none";
+  const accountLabel = document.getElementById("account-label");
+  const accountAvatar = document.querySelector(".account-avatar");
   if (currentUser) {
     document.getElementById("current-username").textContent = currentUser;
+    if (accountLabel) accountLabel.textContent = currentUser;
+    if (accountAvatar) accountAvatar.textContent = currentUser.trim().charAt(0).toUpperCase() || "?";
+  } else {
+    if (accountLabel) accountLabel.textContent = "Account";
+    if (accountAvatar) accountAvatar.textContent = "?";
   }
 
-  // Gate the report form on real auth state -- previously this was always
-  // visible regardless of login status, and currentUser also used to reset
-  // to null on every page refresh even if the session cookie was still valid,
-  // so this now checks the real server-side session instead of assuming.
   document.getElementById("report-form").style.display = currentUser ? "block" : "none";
   document.getElementById("report-login-notice").style.display = currentUser ? "none" : "block";
+  document.getElementById("report-auth-panel").style.display = currentUser ? "none" : "block";
 }
 
 async function checkSession() {
@@ -346,7 +453,9 @@ async function submitReport(e) {
     body: formData,
   });
   const data = await res.json();
-  document.getElementById("report-message").textContent = data.message || data.error;
+  document.getElementById("report-message").textContent = data.warning
+    ? `${data.message} (${data.warning})`
+    : (data.message || data.error);
 
   if (res.ok) {
     document.getElementById("report-form").reset();
@@ -363,21 +472,46 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("register-form").addEventListener("submit", register);
   document.getElementById("login-form").addEventListener("submit", login);
   document.getElementById("logout-btn").addEventListener("click", logout);
+  const accountTrigger = document.getElementById("account-trigger");
+  const accountPopover = document.getElementById("account-popover");
+  accountTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = accountPopover.classList.toggle("is-open");
+    accountTrigger.setAttribute("aria-expanded", String(isOpen));
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#auth-panel")) {
+      accountPopover.classList.remove("is-open");
+      accountTrigger.setAttribute("aria-expanded", "false");
+    }
+  });
   document.getElementById("report-form").addEventListener("submit", submitReport);
   document.getElementById("use-location-btn").addEventListener("click", useCurrentLocation);
 
   const addressInput = document.getElementById("address");
   addressInput.addEventListener("input", (e) => {
-    // Typing invalidates any previously picked location -- programmatic
-    // .value assignment (from selectSuggestion/reverseGeocode) does NOT
-    // fire this event, so picking a suggestion won't immediately clear itself.
     clearPendingLocation();
     debouncedFetchSuggestions(e.target.value.trim());
+  });
+
+  const mapSearchInput = document.getElementById("map-search");
+  mapSearchInput.addEventListener("input", (e) => {
+    debouncedFetchMapSearchSuggestions(e.target.value.trim());
+  });
+
+  document.getElementById("filter-show-reports").addEventListener("change", applyFilters);
+  document.getElementById("filter-show-campaigns").addEventListener("change", applyFilters);
+  document.getElementById("filter-category").addEventListener("change", renderReportMarkers);
+  document.querySelectorAll(".filter-severity").forEach((el) => {
+    el.addEventListener("change", renderReportMarkers);
   });
 
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".location-input-wrap")) {
       document.getElementById("address-suggestions").innerHTML = "";
+    }
+    if (!e.target.closest(".map-search-wrap")) {
+      document.getElementById("map-search-suggestions").innerHTML = "";
     }
   });
 });

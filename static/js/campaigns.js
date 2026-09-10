@@ -1,4 +1,6 @@
-let selectedLocation = null; // {display_name, lat, lon}
+// Shared logic for campaign list, creation, and detail pages.
+
+let selectedLocation = null; // {display_name, lat, lon} -- set only via a picked suggestion
 
 function debounce(fn, delay) {
   let timer;
@@ -20,16 +22,11 @@ function formatDate(dateStr) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-// Strips parenthetical suffixes like "(North)" before sending a query to
-// Nominatim -- some NOAA site names (e.g. "Texas City Dike (North)") aren't
-// real standalone places Nominatim can resolve, so searching the raw name
-// returns nothing. This only affects the outgoing search query, never what's
-// shown in the input field.
 function cleanLocationQuery(text) {
   return text.replace(/\([^)]*\)/g, "").trim();
 }
 
-// --- Location autocomplete (same backend endpoints as report submission) ---
+// --- Location Autocomplete ---
 
 async function fetchLocationSuggestions(query) {
   const list = document.getElementById("campaign-location-suggestions");
@@ -58,7 +55,7 @@ async function fetchLocationSuggestions(query) {
 
 const debouncedFetchLocationSuggestions = debounce(fetchLocationSuggestions, 350);
 
-// --- Popular sites hint, pulled from Phase 4 analytics as inspiration ---
+// --- Popular Sites ---
 
 async function loadPopularSites() {
   const container = document.getElementById("popular-sites");
@@ -80,16 +77,17 @@ async function loadPopularSites() {
       container.appendChild(btn);
     });
   } catch {
-    // this is just a nice-to-have inspiration list -- fail silently if
-    // analytics is slow or unavailable, never block the create form
+    // Fail silently if analytics data is unavailable
   }
 }
 
-// --- Create campaign ---
+// --- Create Campaign ---
 
 async function submitCampaign(e) {
   e.preventDefault();
   const message = document.getElementById("campaign-message");
+  const form = document.getElementById("campaign-form");
+  const submitButton = form.querySelector("button[type='submit']");
 
   if (!selectedLocation) {
     message.textContent = "Search for a location and pick a suggestion first.";
@@ -116,23 +114,32 @@ async function submitCampaign(e) {
     formData.append("photo", photoInput.files[0]);
   }
 
-  const res = await fetch("/api/campaigns", {
-    method: "POST",
-    credentials: "same-origin",
-    body: formData,
-  });
-  const data = await res.json();
-  message.textContent = data.message || data.error;
+  submitButton.disabled = true;
+  submitButton.textContent = "Creating...";
+  message.textContent = "Saving your cleanup campaign...";
+  try {
+    const res = await fetch("/api/campaigns", {
+      method: "POST",
+      credentials: "same-origin",
+      body: formData,
+    });
+    const data = await res.json();
+    message.textContent = data.message || data.error;
 
-  if (res.ok) {
-    document.getElementById("campaign-form").reset();
-    selectedLocation = null;
-    loadCampaignsList();
+    if (res.ok) {
+      form.reset();
+      selectedLocation = null;
+      loadCampaignsList();
+    }
+  } catch {
+    message.textContent = "We couldn't create the campaign. Check your connection and try again.";
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Create campaign";
   }
 }
 
-// --- Share helpers (Facebook + email, with a clipboard fallback since
-// mailto: silently does nothing if the browser has no mail client configured) ---
+// --- Share Helpers ---
 
 const ICON_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>`;
 const ICON_EMAIL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>`;
@@ -151,14 +158,7 @@ function buildGmailComposeUrl(subject, body) {
 }
 
 function buildFacebookShareUrl(shareUrl, locationName, description) {
-  // sharer.php only reads u= reliably for the rich preview card (title,
-  // description, image -- pulled from the page's og: tags, which only
-  // work once this is on a real public URL Facebook's crawler can reach --
-  // it can't fetch http://127.0.0.1 during local testing, so no preview
-  // card will show up locally regardless of how correct the OG tags are).
-  // quote= is a best-effort extra: Facebook sometimes pre-fills it as
-  // suggested text in the composer, though this isn't guaranteed long-term.
-  const quote = `${description} — cleanup at ${locationName}`;
+  const quote = `${description} (cleanup at ${locationName})`;
   return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(quote)}`;
 }
 
@@ -168,16 +168,19 @@ async function loadCampaignsList() {
   const list = document.getElementById("campaigns-list");
   if (!list) return;
 
-  const res = await fetch("/api/campaigns", { credentials: "same-origin" });
-  const campaigns = await res.json();
+  list.innerHTML = '<p class="list-status">Loading cleanup campaigns...</p>';
+  try {
+    const res = await fetch("/api/campaigns", { credentials: "same-origin" });
+    const campaigns = await res.json();
+    if (!res.ok || !Array.isArray(campaigns)) throw new Error("Campaigns unavailable");
 
-  list.innerHTML = "";
-  if (campaigns.length === 0) {
-    list.innerHTML = "<p>No campaigns yet -- be the first to organize one!</p>";
-    return;
-  }
+    list.innerHTML = "";
+    if (campaigns.length === 0) {
+      list.innerHTML = "<p class='list-status'>No campaigns yet. Be the first to organize one.</p>";
+      return;
+    }
 
-  campaigns.forEach((c) => {
+    campaigns.forEach((c) => {
     const locationName = c.location_name || "Unknown location";
     const organizerName = c.organizer_username || "Someone";
     const card = document.createElement("div");
@@ -213,8 +216,11 @@ async function loadCampaignsList() {
     `;
 
     card.querySelector(".rsvp-btn").addEventListener("click", (e) => toggleRsvp(e.target.closest(".rsvp-btn"), c.campaign_id));
-    list.appendChild(card);
-  });
+      list.appendChild(card);
+    });
+  } catch {
+    list.innerHTML = '<p class="list-status list-error">Campaigns are temporarily unavailable. Refresh and try again.</p>';
+  }
 }
 
 async function toggleRsvp(button, campaignId) {
@@ -235,54 +241,90 @@ async function toggleRsvp(button, campaignId) {
   }
 }
 
-// --- Detail page (RSVP button + share links) ---
+// --- Detail Page ---
 
 async function setupDetailPage() {
   const btn = document.getElementById("rsvp-btn");
   if (!btn) return;
 
+  const status = document.getElementById("campaign-detail-status");
   const campaignId = btn.dataset.campaignId;
-  const res = await fetch(`/api/campaigns/${campaignId}`, { credentials: "same-origin" });
-  const c = await res.json();
-
-  const organizerName = c.organizer_username || "Someone";
-  document.getElementById("campaign-avatar").textContent = avatarInitial(organizerName);
-  document.getElementById("campaign-organizer").textContent = organizerName;
-  document.getElementById("campaign-date-line").textContent = `Cleanup: ${formatDate(c.date)}`;
-  document.getElementById("campaign-posted-line").textContent = `Posted ${formatDate(c.created_at)}`;
-
-  btn.dataset.rsvped = c.user_has_rsvped;
-  btn.classList.toggle("rsvp-going", c.user_has_rsvped);
-  btn.innerHTML = `${ICON_CALENDAR}<span>${c.user_has_rsvped ? "Going" : "RSVP"}</span>`;
-  document.getElementById("rsvp-status").textContent = `${c.rsvp_count ?? 0} going`;
-
-  btn.onclick = async () => {
-    const isRsvped = btn.dataset.rsvped === "true";
-    const method = isRsvped ? "DELETE" : "POST";
-    const rsvpRes = await fetch(`/api/campaigns/${campaignId}/rsvp`, { method, credentials: "same-origin" });
-
-    if (rsvpRes.status === 401) {
-      alert("Log in to RSVP.");
-      return;
-    }
-    if (rsvpRes.ok) {
-      setupDetailPage();
-    }
+  const setStatus = (message, isError = false) => {
+    if (!status) return;
+    status.className = `campaign-detail-status${isError ? " is-error" : ""}`;
+    status.innerHTML = isError
+      ? `${escapeHtml(message)} <button type="button" class="status-retry">Try again</button>`
+      : `<span class="status-spinner" aria-hidden="true"></span>${escapeHtml(message)}`;
+    const retry = status.querySelector(".status-retry");
+    if (retry) retry.addEventListener("click", setupDetailPage, { once: true });
   };
 
-  const shareUrl = window.location.href;
-  const shareText = buildShareText(c.location_name, c.description, c.date, shareUrl);
+  btn.disabled = true;
+  setStatus("Loading campaign details...");
 
-  const fbLink = document.getElementById("fb-share");
-  if (fbLink) {
-    fbLink.href = buildFacebookShareUrl(shareUrl, c.location_name, c.description);
-    fbLink.innerHTML = `${ICON_SHARE}<span>Facebook</span>`;
-  }
+  try {
+    const res = await fetch(`/api/campaigns/${campaignId}`, { credentials: "same-origin" });
+    const c = await res.json();
+    if (!res.ok || !c || c.error) {
+      throw new Error(c?.error || "We couldn't load this campaign.");
+    }
 
-  const gmailLink = document.getElementById("gmail-share");
-  if (gmailLink) {
-    gmailLink.href = buildGmailComposeUrl(`Join a beach cleanup at ${c.location_name}`, shareText);
-    gmailLink.innerHTML = `${ICON_EMAIL}<span>Email</span>`;
+    const organizerName = c.organizer_username || "Someone";
+    document.getElementById("campaign-avatar").textContent = avatarInitial(organizerName);
+    document.getElementById("campaign-organizer").textContent = organizerName;
+    document.getElementById("campaign-date-line").textContent = `Cleanup: ${formatDate(c.date)}`;
+    document.getElementById("campaign-posted-line").textContent = `Posted ${formatDate(c.created_at)}`;
+
+    btn.dataset.rsvped = c.user_has_rsvped;
+    btn.classList.toggle("rsvp-going", c.user_has_rsvped);
+    btn.innerHTML = `${ICON_CALENDAR}<span>${c.user_has_rsvped ? "Going" : "RSVP"}</span>`;
+    btn.disabled = false;
+    document.getElementById("rsvp-status").textContent = `${c.rsvp_count ?? 0} going`;
+    if (status) {
+      status.className = "campaign-detail-status is-ready";
+      status.textContent = "Campaign details loaded";
+    }
+
+    btn.onclick = async () => {
+      const isRsvped = btn.dataset.rsvped === "true";
+      const method = isRsvped ? "DELETE" : "POST";
+      btn.disabled = true;
+      const rsvpRes = await fetch(`/api/campaigns/${campaignId}/rsvp`, { method, credentials: "same-origin" });
+
+      if (rsvpRes.status === 401) {
+        alert("Log in to RSVP.");
+        btn.disabled = false;
+        return;
+      }
+      if (rsvpRes.ok) {
+        setupDetailPage();
+      } else {
+        btn.disabled = false;
+        setStatus("We couldn't update your RSVP. Please try again.", true);
+      }
+    };
+
+    const shareUrl = window.location.href;
+    const shareText = buildShareText(c.location_name, c.description, c.date, shareUrl);
+
+    const fbLink = document.getElementById("fb-share");
+    if (fbLink) {
+      fbLink.href = buildFacebookShareUrl(shareUrl, c.location_name, c.description);
+      fbLink.innerHTML = `${ICON_SHARE}<span>Facebook</span>`;
+      fbLink.classList.remove("is-disabled");
+      fbLink.removeAttribute("aria-disabled");
+    }
+
+    const gmailLink = document.getElementById("gmail-share");
+    if (gmailLink) {
+      gmailLink.href = buildGmailComposeUrl(`Join a beach cleanup at ${c.location_name}`, shareText);
+      gmailLink.innerHTML = `${ICON_EMAIL}<span>Email</span>`;
+      gmailLink.classList.remove("is-disabled");
+      gmailLink.removeAttribute("aria-disabled");
+    }
+  } catch (error) {
+    btn.disabled = true;
+    setStatus(error.message || "We couldn't load this campaign.", true);
   }
 }
 

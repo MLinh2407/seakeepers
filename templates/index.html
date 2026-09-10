@@ -3,47 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SeaKeepers — Marine Debris Map</title>
+  <title>SeaKeepers - Marine Debris Map</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
-<body>
-  <header>
-    <h1>SeaKeepers</h1>
-    <a href="/dashboard" style="color:white;">Analytics →</a>
-    <a href="/campaigns" style="color:white;">Campaigns →</a>
-    <a href="/profile" style="color:white;">My Page →</a>
-    <div id="notif-wrap">
-      <button id="notif-bell">🔔<span id="notif-badge"></span></button>
+<body class="{% if not session.get('user_id') %}logged-out{% endif %}">
+  <!-- Header & Navigation -->
+  <header class="app-header">
+    <a href="/" class="site-logo">SeaKeepers</a>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a href="/" aria-current="page">Map</a>
+      <a href="/dashboard">Analytics</a>
+      <a href="/campaigns">Campaigns</a>
+      <a href="/profile" data-auth-required>My Page</a>
+    </nav>
+    <div class="header-actions">
+    <div id="notif-wrap" data-auth-required>
+      <button id="notif-bell" type="button" aria-label="Open notifications" aria-expanded="false">🔔<span id="notif-badge"></span></button>
       <div id="notif-dropdown"></div>
     </div>
-    <div id="auth-panel">
-      <div id="logged-out-panel">
-        <form id="login-form" class="inline-form">
-          <input type="email" id="login-email" placeholder="Email" required />
-          <input type="password" id="login-password" placeholder="Password" required />
-          <button type="submit">Log in</button>
-        </form>
-        <details>
-          <summary>Need an account?</summary>
-          <form id="register-form" class="inline-form">
-            <input type="email" id="reg-email" placeholder="Email" required />
-            <input type="text" id="reg-username" placeholder="Username" required />
-            <input type="password" id="reg-password" placeholder="Password" required />
-            <button type="submit">Register</button>
-          </form>
-        </details>
-      </div>
-      <div id="logged-in-panel" style="display:none;">
-        Logged in as <strong id="current-username"></strong>
-        <button id="logout-btn">Log out</button>
+    <div id="auth-panel" class="auth-panel" data-auth-required>
+      <button id="account-trigger" class="account-trigger" type="button" aria-expanded="false">
+        <span class="account-avatar" aria-hidden="true">?</span>
+        <span id="account-label">Account</span>
+      </button>
+      <div id="account-popover" class="account-popover">
+        <div id="logged-in-panel" class="logged-in-panel">
+          <p class="account-copy">Signed in as <strong id="current-username"></strong></p>
+          <a href="/profile" class="account-link">Open My Page</a>
+          <button id="logout-btn" class="logout-action" type="button">Log out</button>
+        </div>
+        <p id="auth-message" class="message" role="status" aria-live="polite"></p>
       </div>
     </div>
-    <p id="auth-message" class="message"></p>
+    </div>
   </header>
 
+  <!-- Map Main Section -->
   <main class="map-main">
     <div id="map"></div>
+
+    <!-- Map Search & Filters Overlay -->
+    <div class="map-controls">
+      <div class="map-search-wrap">
+        <input type="text" id="map-search" placeholder="Search a place to view..." autocomplete="off" />
+        <ul id="map-search-suggestions" class="suggestions-list"></ul>
+      </div>
+
+      <div class="filter-panel">
+        <div class="filter-row">
+          <label><input type="checkbox" id="filter-show-reports" checked /> Reports</label>
+          <label><input type="checkbox" id="filter-show-campaigns" checked /> Campaigns</label>
+        </div>
+        <div class="filter-row filter-row-wrap">
+          <span class="filter-label">Severity:</span>
+          <label><input type="checkbox" class="filter-severity" value="low" checked /> Low</label>
+          <label><input type="checkbox" class="filter-severity" value="medium" checked /> Medium</label>
+          <label><input type="checkbox" class="filter-severity" value="high" checked /> High</label>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Category:</span>
+          <select id="filter-category">
+            <option value="all">All</option>
+            <option value="plastic">Plastic</option>
+            <option value="glass">Glass</option>
+            <option value="metal">Metal</option>
+            <option value="rubber">Rubber</option>
+            <option value="fabric">Fabric</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <p id="filter-count" class="filter-count"></p>
+      </div>
+    </div>
+
+    <!-- Map Key Legend -->
     <div class="map-legend">
       <div class="legend-title">Map key</div>
       <div class="legend-row"><span class="legend-dot" style="background:#2ecc71;"></span> Low severity debris</div>
@@ -57,9 +91,34 @@
       </span> Cleanup campaign</div>
     </div>
 
+    <!-- Debris Report Sidebar -->
     <aside id="report-panel">
       <h2>Report Debris</h2>
+      <p class="scope-hint">SeaKeepers focuses on marine and coastal debris. Rivers and waterways leading to the ocean count too.</p>
       <p id="report-login-notice">Log in to submit a report.</p>
+      <div id="report-auth-panel">
+        <p class="account-copy">Sign in to report debris and join cleanups.</p>
+        <form id="login-form" class="account-form">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" required />
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Your password" required />
+          <button type="submit" class="primary-action">Log in</button>
+        </form>
+        <details class="register-details">
+          <summary>Create an account</summary>
+          <form id="register-form" class="account-form">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" placeholder="you@example.com" required />
+            <label for="reg-username">Username</label>
+            <input type="text" id="reg-username" placeholder="Choose a username" required />
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" placeholder="At least 8 characters" minlength="8" required />
+            <button type="submit" class="secondary-action">Create account</button>
+          </form>
+        </details>
+        <p id="report-auth-message" class="message" role="status" aria-live="polite"></p>
+      </div>
       <form id="report-form" style="display:none;">
         <label for="category">Category</label>
         <select id="category" required>
@@ -85,7 +144,7 @@
         </div>
         <button type="button" id="use-location-btn" class="secondary-btn">Use my current location</button>
 
-        <p class="hint">— or click a spot on the map to drop a pin —</p>
+        <p class="hint">Or click a spot on the map to drop a pin.</p>
         <p id="pin-status" class="message"></p>
         <input type="hidden" id="lat" />
         <input type="hidden" id="lon" />
