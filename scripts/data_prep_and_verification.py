@@ -1,17 +1,7 @@
 """
 SeaKeepers - NOAA MDMAP Seed Data Preparation & Verification
-================================================================
-Downloads, combines, cleans, verifies, and reshapes NOAA Marine Debris
-Monitoring and Assessment Project (MDMAP) survey data into the format
-needed to seed the SeaKeepers DebrisReports table.
-
-Prerequisite: raw MDMAP export CSVs must already be downloaded into
-data/raw/ (see README for the export URL pattern used, since exports
-are requested by explicit site-ID lists rather than a single bulk
-download link).
-
-Run this from the project's code/scripts/ directory:
-    python data_prep_and_verification.py
+Combines, cleans, verifies, and reshapes raw NOAA MDMAP survey CSVs 
+into seed_reports.csv for DynamoDB seeding.
 """
 
 import glob
@@ -21,13 +11,7 @@ import pandas as pd
 RAW_DATA_DIR = "data/raw"
 OUTPUT_PATH = "data/seed_reports.csv"
 
-# Officially published NOAA MDMAP summary figures, used as an integrity
-# cross-check (see verify_data_integrity() below). Cited from NOAA's own
-# program materials: "since 2012, MDMAP has brought forth data from 4,421
-# surveys at 335 monitoring sites in nine countries." This is a
-# cumulative, non-dated figure repeated across several NOAA pages, so it
-# is used as a plausibility check rather than an exact-match requirement
-# (see the honesty note printed at the end of this script).
+# Published NOAA MDMAP summary statistics used as a directional integrity cross-check
 NOAA_PUBLISHED_SURVEYS = 4421
 NOAA_PUBLISHED_SITES = 335
 NOAA_PUBLISHED_COUNTRIES = 9
@@ -61,12 +45,7 @@ def deduplicate(combined: pd.DataFrame) -> pd.DataFrame:
 
 
 def verify_data_integrity(combined: pd.DataFrame) -> None:
-    """
-    Cross-check combined dataset totals against NOAA's publicly cited
-    MDMAP summary figures. Mirrors the verification approach used for
-    this project's earlier flight-delay dataset (cross-checked against
-    the U.S. DOT's official Air Travel Consumer Report).
-    """
+    """Cross-checks survey and site counts against published NOAA baseline figures."""
     unique_sites = combined["shoreline_site_id"].nunique()
     unique_surveys = combined["survey_id"].nunique()
     unique_countries = combined["country"].nunique()
@@ -96,13 +75,7 @@ def verify_data_integrity(combined: pd.DataFrame) -> None:
 
 
 def filter_to_mdmap2_protocol(combined: pd.DataFrame) -> pd.DataFrame:
-    """
-    Keep only MDMAP 2.0 Protocol rows. Older protocols (Standing Stock,
-    Accumulation) use different transect dimensions, making raw debris
-    counts non-comparable across protocol versions without unit
-    normalization. Filtering to a single, current, standardized protocol
-    avoids this issue entirely for this project's scope.
-    """
+    """Filters data to MDMAP 2.0 Protocol rows to ensure standardized transect dimensions."""
     print("Protocol breakdown before filtering:")
     print(combined["survey_protocol"].value_counts())
 
@@ -114,11 +87,7 @@ def filter_to_mdmap2_protocol(combined: pd.DataFrame) -> pd.DataFrame:
 
 
 def aggregate_to_survey_level(mdmap2: pd.DataFrame) -> pd.DataFrame:
-    """
-    Collapse transect-level rows (multiple rows per survey) into one row
-    per survey, since the app's DebrisReports schema is one report per
-    survey event, not per transect.
-    """
+    """Collapses transect-level entries into single survey-level records."""
     mdmap2 = mdmap2.copy()
     mdmap2["has_photo"] = mdmap2["survey_photos"].notna()
 
@@ -176,7 +145,7 @@ def derive_category(survey_level: pd.DataFrame) -> pd.DataFrame:
 
 
 def derive_severity(survey_level: pd.DataFrame) -> pd.DataFrame:
-    """Bucket each survey into low/medium/high severity using quantiles of its own distribution."""
+    """Buckets total debris counts into low, medium, or high severity using dataset quantiles."""
     survey_level = survey_level.copy()
     q1, q2 = survey_level["total_debris_items"].quantile([0.33, 0.66])
 
@@ -193,14 +162,7 @@ def derive_severity(survey_level: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_photo_urls(survey_level: pd.DataFrame) -> pd.DataFrame:
-    """
-    Construct real NOAA photo URLs where a photo was reported.
-    Verified working pattern: the numeric survey_id (not the photo
-    filename) is the correct lookup key for MDMAP's public photo-serving
-    endpoint. Confirmed by manually testing several real survey_ids from
-    this dataset, 7 of 10 returned real images (the remainder likely had
-    no photo actually attached despite a filename being logged).
-    """
+    """Constructs public NOAA photo URLs using survey_id keys where photos are present."""
     survey_level = survey_level.copy()
     survey_level["photo_url"] = survey_level.apply(
         lambda row: (
@@ -214,7 +176,7 @@ def build_photo_urls(survey_level: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_seed_reports(survey_level: pd.DataFrame) -> pd.DataFrame:
-    """Assemble the final dataframe matching the DebrisReports DynamoDB schema."""
+    """Formats survey records into the DebrisReports DynamoDB seed schema."""
     seed_reports = pd.DataFrame(
         {
             "report_id": "seed_" + survey_level["survey_id"].astype(str),

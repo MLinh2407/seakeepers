@@ -1,19 +1,4 @@
-"""
-load_seed_data.py
-
-Batch-loads seed_reports.csv into the DebrisReports DynamoDB table.
-
-Prerequisites:
-- AWS Academy Learner Lab session started, credentials configured locally
-  (see the "AWS Details" panel in the Lab -> paste into ~/.aws/credentials
-  under a profile, or set as environment variables before running).
-- DebrisReports table already created in DynamoDB (region us-east-1).
-- seed_reports.csv present at the path below (adjust if needed).
-
-Usage:
-    pip install boto3 pandas
-    python load_seed_data.py
-"""
+"""Batch-loads seed_reports.csv into the DebrisReports DynamoDB table."""
 
 from decimal import Decimal
 
@@ -32,7 +17,6 @@ def to_dynamo_value(val):
     if pd.isna(val):
         return None
     if isinstance(val, float):
-        # DynamoDB requires Decimal, not float, for numeric types
         return Decimal(str(val))
     return val
 
@@ -55,7 +39,7 @@ def main():
                 if converted is not None:
                     item[col] = converted
 
-            # report_id is the partition key -- skip any row missing it
+            # report_id is the partition key
             if "report_id" not in item:
                 skipped += 1
                 continue
