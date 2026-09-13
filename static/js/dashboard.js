@@ -132,9 +132,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const status = document.createElement("p");
   status.id = "cache-status";
   if (anyPartial) {
-    status.textContent = "Some data couldn't be loaded (Athena may be slow or unavailable right now) -- showing what's available.";
+    status.textContent = "Some data couldn't be loaded. Showing available results.";
   } else if (anyCached) {
-    status.textContent = "Some charts loaded from cache (refresh again within 5 min to see this). Redis caching is working.";
+    status.textContent = "Charts loaded from cache (refresh again within 5 min to see this). Redis caching is working.";
   } else {
     status.textContent = "Freshly computed from Athena and DynamoDB (first load or cache expired).";
   }
